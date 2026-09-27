@@ -1,0 +1,35 @@
+name: sync-site
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency: sync-site
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Mirror site from origin
+        run: |
+          SRC=$(tr -d ' \r\n' < source_url.txt)
+          echo "SRC=$SRC" >> $GITHUB_ENV
+          mkdir out
+          while read -r f; do
+            [ -z "$f" ] && continue
+            curl -fsSL --retry 3 "$SRC/$f" -o "out/$f"
+          done < files.txt
+          touch out/.nojekyll
+          grep -q HaanJi out/index.html
+          grep -q UPI out/pay.html
+          ls -la out
+      - name: Publish to gh-pages
+        run: |
+          cd out
+          git init -q -b gh-pages
+          git config user.name github-actions
+          git config user.email github-actions@users.noreply.github.com
+          git add -A
+          git commit -qm "sync from $SRC"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}" gh-pages
